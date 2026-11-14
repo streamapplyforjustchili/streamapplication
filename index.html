@@ -1,9 +1,15 @@
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stream Application</title>
     <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
+
 <body>
 
     <div class="container">
@@ -11,16 +17,86 @@
         <p>Apply to be part of the stream!</p>
 
         <form id="applicationForm">
+
             <label>Discord Username</label>
-            <input type="text" id="discord" placeholder="Your Discord username" required>
+            <input
+                type="text"
+                id="discord"
+                placeholder="Your Discord username"
+                required
+            >
 
             <label>Why do you want to be part of the stream?</label>
-            <textarea id="reason" placeholder="Tell us why..." required></textarea>
+            <textarea
+                id="reason"
+                placeholder="Tell us why..."
+                required
+            ></textarea>
 
-            <button type="submit">Submit Application</button>
+            <button type="submit" id="submitButton">
+                Submit Application
+            </button>
+
         </form>
+
+        <p id="message"></p>
     </div>
 
-    <script src="script.js"></script>
+    <script>
+        const SUPABASE_URL = "https://nokfdjfcpunxiorlhyob.supabase.co";
+
+        const SUPABASE_KEY = "sb_publishable_tKS3LtY79HBB5emuNlVPng_kbKmLjdM";
+
+        const db = window.supabase.createClient(
+            SUPABASE_URL,
+            SUPABASE_KEY
+        );
+
+        const form = document.getElementById("applicationForm");
+        const button = document.getElementById("submitButton");
+        const message = document.getElementById("message");
+
+        form.addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const discord = document.getElementById("discord").value.trim();
+            const reason = document.getElementById("reason").value.trim();
+
+            if (!discord || !reason) {
+                message.textContent = "Please fill in both fields.";
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = "Submitting...";
+            message.textContent = "";
+
+            const { error } = await db
+                .from("applications")
+                .insert([
+                    {
+                        discord: discord,
+                        reason: reason,
+                        status: "Pending"
+                    }
+                ]);
+
+            if (error) {
+                message.textContent = "Submission failed: " + error.message;
+                button.disabled = false;
+                button.textContent = "Submit Application";
+                return;
+            }
+
+            form.remove();
+
+            message.textContent = "Submitted";
+            message.style.color = "green";
+            message.style.fontSize = "24px";
+            message.style.fontWeight = "bold";
+        });
+    </script>
+
 </body>
 </html>
+
