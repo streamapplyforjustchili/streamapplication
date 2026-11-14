@@ -2,140 +2,399 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Admin Dashboard</title>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        .application {
-            border: 1px solid #ddd;
-            padding: 20px;
-            margin-top: 15px;
-            border-radius: 8px;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stream Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-        .actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: white;
+        color: #111;
+        margin: 0;
+        padding: 40px 20px;
+    }
 
-        .actions button {
-            width: auto;
-            margin: 0;
-            padding: 10px 20px;
-        }
+    .container {
+        max-width: 750px;
+        margin: auto;
+    }
 
-        .accept {
-            background: #16a34a;
-        }
+    h1 { font-size: 30px; }
 
-        .reject {
-            background: #dc2626;
-        }
+    input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 13px;
+        margin: 8px 0 15px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 15px;
+    }
 
-        .submitted {
-            color: #16a34a;
-            font-weight: bold;
-            margin-top: 15px;
-        }
-    </style>
+    button {
+        padding: 12px 18px;
+        background: black;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .tabs {
+        display: flex;
+        gap: 10px;
+        margin: 25px 0;
+    }
+
+    .tab {
+        background: #eee;
+        color: #111;
+    }
+
+    .tab.active {
+        background: black;
+        color: white;
+    }
+
+    .application {
+        border: 1px solid #ddd;
+        padding: 20px;
+        margin-top: 15px;
+        border-radius: 8px;
+    }
+
+    .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 18px;
+    }
+
+    .accept { background: #16a34a; }
+    .reject { background: #dc2626; }
+
+    .error { color: #dc2626; }
+
+    #dashboard { display: none; }
+
+    #logout {
+        float: right;
+    }
+</style>
 </head>
+
 <body>
 
-    <div class="container">
-        <h1>Applications</h1>
-        <p>Review stream applications.</p>
+<div class="container">
 
-        <div id="applications"></div>
+    <!-- LOGIN -->
+
+    <div id="login">
+        <h1>Admin Login</h1>
+        <p>Sign in to review stream applications.</p>
+
+        <form id="loginForm">
+            <label>Email</label>
+            <input type="email" id="email" required>
+
+            <label>Password</label>
+            <input type="password" id="password" required>
+
+            <button type="submit" id="loginButton">Login</button>
+        </form>
+
+        <p id="message" class="error"></p>
     </div>
 
-    <script>
-        function loadApplications() {
-            const applications = JSON.parse(
-                localStorage.getItem("applications") || "[]"
-            );
 
-            const container = document.getElementById("applications");
-            container.replaceChildren();
+    <!-- DASHBOARD -->
 
-            if (applications.length === 0) {
-                container.textContent = "No applications yet.";
-                return;
-            }
+    <div id="dashboard">
 
-            applications.forEach((app, index) => {
-                const card = document.createElement("div");
-                card.className = "application";
+        <button id="logout">Logout</button>
 
-                const username = document.createElement("h3");
-                username.textContent = app.discord;
+        <h1>Stream Applications</h1>
+        <p>Manage your stream applications.</p>
 
-                const reason = document.createElement("p");
-                reason.textContent = app.reason;
+        <div class="tabs">
+            <button class="tab active" id="pendingTab">Pending</button>
+            <button class="tab" id="acceptedTab">Accepted</button>
+        </div>
 
-                card.append(username, reason);
+        <button id="refresh">Refresh</button>
 
-                if (app.status === "Submitted") {
-                    const status = document.createElement("p");
-                    status.className = "submitted";
-                    status.textContent = "✓ Submitted";
-                    card.appendChild(status);
-                } else {
-                    const actions = document.createElement("div");
-                    actions.className = "actions";
+        <div id="applications">Loading...</div>
 
-                    const accept = document.createElement("button");
-                    accept.className = "accept";
-                    accept.textContent = "Accept";
-                    accept.onclick = () => updateStatus(index, "Submitted");
+    </div>
 
-                    const reject = document.createElement("button");
-                    reject.className = "reject";
-                    reject.textContent = "Reject";
-                    reject.onclick = () => rejectApplication(index);
+</div>
 
-                    actions.append(accept, reject);
-                    card.appendChild(actions);
-                }
 
-                container.appendChild(card);
-            });
+<script>
+
+const SUPABASE_URL =
+"https://nokfdjfcpunxiorlhyob.supabase.co";
+
+const SUPABASE_KEY =
+"sb_publishable_tKS3LtY79HBB5emuNlVPng_kbKmLjdM";
+
+const db = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
+
+let currentTab = "Pending";
+
+
+// LOGIN
+
+document.getElementById("loginForm").addEventListener("submit", async function(event) {
+    event.preventDefault();
+
+    const button = document.getElementById("loginButton");
+    const message = document.getElementById("message");
+
+    button.disabled = true;
+    button.textContent = "Logging in...";
+    message.textContent = "";
+
+    const { error } = await db.auth.signInWithPassword({
+        email: document.getElementById("email").value,
+        password: document.getElementById("password").value
+    });
+
+    button.disabled = false;
+    button.textContent = "Login";
+
+    if (error) {
+        message.textContent = error.message;
+        return;
+    }
+
+    showDashboard();
+});
+
+
+// SHOW DASHBOARD
+
+async function showDashboard() {
+    document.getElementById("login").style.display = "none";
+    document.getElementById("dashboard").style.display = "block";
+
+    loadApplications();
+}
+
+
+// SWITCH TABS
+
+document.getElementById("pendingTab").onclick = function() {
+    currentTab = "Pending";
+    updateTabs();
+    loadApplications();
+};
+
+document.getElementById("acceptedTab").onclick = function() {
+    currentTab = "Submitted";
+    updateTabs();
+    loadApplications();
+};
+
+function updateTabs() {
+    document.getElementById("pendingTab").classList.toggle(
+        "active", currentTab === "Pending"
+    );
+
+    document.getElementById("acceptedTab").classList.toggle(
+        "active", currentTab === "Submitted"
+    );
+}
+
+
+// LOAD APPLICATIONS
+
+async function loadApplications() {
+    const container = document.getElementById("applications");
+    container.textContent = "Loading applications...";
+
+    const { data, error } = await db
+        .from("applications")
+        .select("*")
+        .eq("status", currentTab)
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        container.textContent = "Error: " + error.message;
+        return;
+    }
+
+    container.replaceChildren();
+
+    if (!data || data.length === 0) {
+        container.textContent = currentTab === "Pending"
+            ? "No pending applications."
+            : "No accepted applications.";
+
+        return;
+    }
+
+    data.forEach(app => {
+        const card = document.createElement("div");
+        card.className = "application";
+
+        const username = document.createElement("h3");
+        username.textContent = app.discord;
+
+        const reason = document.createElement("p");
+        reason.textContent = app.reason;
+
+        card.append(username, reason);
+
+        if (currentTab === "Pending") {
+            const actions = document.createElement("div");
+            actions.className = "actions";
+
+            const accept = document.createElement("button");
+            accept.className = "accept";
+            accept.textContent = "Accept";
+
+            const reject = document.createElement("button");
+            reject.className = "reject";
+            reject.textContent = "Reject";
+
+            accept.onclick = () =>
+                acceptApplication(app.id, card, accept, reject);
+
+            reject.onclick = () =>
+                rejectApplication(app.id, card, accept, reject);
+
+            actions.append(accept, reject);
+            card.appendChild(actions);
+
+        } else {
+            const status = document.createElement("p");
+            status.textContent = "Accepted";
+            status.style.color = "#16a34a";
+            status.style.fontWeight = "bold";
+            card.appendChild(status);
         }
 
-        function updateStatus(index, newStatus) {
-            const applications = JSON.parse(
-                localStorage.getItem("applications") || "[]"
-            );
+        container.appendChild(card);
+    });
+}
 
-            applications[index].status = newStatus;
 
-            localStorage.setItem(
-                "applications",
-                JSON.stringify(applications)
-            );
+// ACCEPT APPLICATION
 
-            loadApplications();
-        }
+async function acceptApplication(id, card, accept, reject) {
+    accept.disabled = true;
+    reject.disabled = true;
 
-        function rejectApplication(index) {
-            const applications = JSON.parse(
-                localStorage.getItem("applications") || "[]"
-            );
+    const { data, error } = await db
+        .from("applications")
+        .update({ status: "Submitted" })
+        .eq("id", id)
+        .select();
 
-            applications.splice(index, 1);
+    if (error || !data || data.length === 0) {
+        showError(card, error ? error.message : "Could not update application.");
+        accept.disabled = false;
+        reject.disabled = false;
+        return;
+    }
 
-            localStorage.setItem(
-                "applications",
-                JSON.stringify(applications)
-            );
+    card.remove();
+    showEmptyMessage();
+}
 
-            loadApplications();
-        }
 
-        window.addEventListener("storage", loadApplications);
+// REJECT APPLICATION
 
-        loadApplications();
-    </script>
+async function rejectApplication(id, card, accept, reject) {
+    accept.disabled = true;
+    reject.disabled = true;
+
+    const { data, error } = await db
+        .from("applications")
+        .delete()
+        .eq("id", id)
+        .select();
+
+    if (error || !data || data.length === 0) {
+        showError(card, error ? error.message : "Could not delete application.");
+        accept.disabled = false;
+        reject.disabled = false;
+        return;
+    }
+
+    card.remove();
+    showEmptyMessage();
+}
+
+
+// SHOW ERRORS
+
+function showError(card, message) {
+    let error = card.querySelector(".error");
+
+    if (!error) {
+        error = document.createElement("p");
+        error.className = "error";
+        card.appendChild(error);
+    }
+
+    error.textContent = message;
+}
+
+
+// EMPTY MESSAGE
+
+function showEmptyMessage() {
+    const container = document.getElementById("applications");
+
+    if (container.querySelectorAll(".application").length === 0) {
+        container.textContent = currentTab === "Pending"
+            ? "No pending applications."
+            : "No accepted applications.";
+    }
+}
+
+
+// REFRESH
+
+document.getElementById("refresh").onclick = loadApplications;
+
+
+// LOGOUT
+
+document.getElementById("logout").onclick = async function() {
+    await db.auth.signOut();
+
+    document.getElementById("dashboard").style.display = "none";
+    document.getElementById("login").style.display = "block";
+};
+
+
+// CHECK LOGIN
+
+async function checkLogin() {
+    const { data: { session } } = await db.auth.getSession();
+
+    if (session) {
+        showDashboard();
+    }
+}
+
+checkLogin();
+
+</script>
 
 </body>
 </html>
+
