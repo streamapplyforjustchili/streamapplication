@@ -1,0 +1,141 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .application {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-top: 15px;
+            border-radius: 8px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .actions button {
+            width: auto;
+            margin: 0;
+            padding: 10px 20px;
+        }
+
+        .accept {
+            background: #16a34a;
+        }
+
+        .reject {
+            background: #dc2626;
+        }
+
+        .submitted {
+            color: #16a34a;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Applications</h1>
+        <p>Review stream applications.</p>
+
+        <div id="applications"></div>
+    </div>
+
+    <script>
+        function loadApplications() {
+            const applications = JSON.parse(
+                localStorage.getItem("applications") || "[]"
+            );
+
+            const container = document.getElementById("applications");
+            container.replaceChildren();
+
+            if (applications.length === 0) {
+                container.textContent = "No applications yet.";
+                return;
+            }
+
+            applications.forEach((app, index) => {
+                const card = document.createElement("div");
+                card.className = "application";
+
+                const username = document.createElement("h3");
+                username.textContent = app.discord;
+
+                const reason = document.createElement("p");
+                reason.textContent = app.reason;
+
+                card.append(username, reason);
+
+                if (app.status === "Submitted") {
+                    const status = document.createElement("p");
+                    status.className = "submitted";
+                    status.textContent = "✓ Submitted";
+                    card.appendChild(status);
+                } else {
+                    const actions = document.createElement("div");
+                    actions.className = "actions";
+
+                    const accept = document.createElement("button");
+                    accept.className = "accept";
+                    accept.textContent = "Accept";
+                    accept.onclick = () => updateStatus(index, "Submitted");
+
+                    const reject = document.createElement("button");
+                    reject.className = "reject";
+                    reject.textContent = "Reject";
+                    reject.onclick = () => rejectApplication(index);
+
+                    actions.append(accept, reject);
+                    card.appendChild(actions);
+                }
+
+                container.appendChild(card);
+            });
+        }
+
+        function updateStatus(index, newStatus) {
+            const applications = JSON.parse(
+                localStorage.getItem("applications") || "[]"
+            );
+
+            applications[index].status = newStatus;
+
+            localStorage.setItem(
+                "applications",
+                JSON.stringify(applications)
+            );
+
+            loadApplications();
+        }
+
+        function rejectApplication(index) {
+            const applications = JSON.parse(
+                localStorage.getItem("applications") || "[]"
+            );
+
+            applications.splice(index, 1);
+
+            localStorage.setItem(
+                "applications",
+                JSON.stringify(applications)
+            );
+
+            loadApplications();
+        }
+
+        window.addEventListener("storage", loadApplications);
+
+        loadApplications();
+    </script>
+
+</body>
+</html>
